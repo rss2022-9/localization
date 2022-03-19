@@ -16,6 +16,7 @@ class SensorModel:
         self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
         self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
         self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
+        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
 
         ####################################
         # TODO
@@ -24,19 +25,19 @@ class SensorModel:
         self.alpha_short = 0.07
         self.alpha_max = 0.07
         self.alpha_rand = 0.12
-        self.sigma_hit = 8.0
-
-        zmin = 0
-        zmax = 10
-        sigma_hit = 8
-        eps = 1 # for Pmax
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
+
+        self.zmin = 0
+        self.zmax = self.table_width-1
+        self.eps = 1 # for Pmax
+        self.sigma_hit = 8.0
+        self.squash = 1/2.2   # avoid peak in the probablity
         ####################################
 
         # Precompute the sensor model table
-        self.sensor_model_table = None
+        self.sensor_model_table = np.zeros([self.table_width, self.table_width])
         self.precompute_sensor_model()
 
         # Create a simulated laser scan
@@ -79,15 +80,15 @@ class SensorModel:
         zmin = self.zmin
         zmax = self.zmax
         sigma_hit = self.sigma_hit
-        eps = self.eps # for Pmam
+        eps = self.eps # for Pmax
 
-        def Phit(zki, eta, sigma=sigma_hit, d=7, zmax=zmax):
+        def Phit(zki, eta, d, sigma=sigma_hit, zmax=zmax):
             if zki>=0 and zki<=zmax:
-                return eta*np.sqrt(2*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2*sigma**2))
+                return eta/np.sqrt(2*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2*sigma**2))
             return 0
 
-        def Pshort(zki, d=7):
-            if zki>=0 and zki<d and d!=0:
+        def Pshort(zki, d):
+            if zki>=0 and zki<=d and d!=0:
                 return 2/d*(1-zki/d)
             return 0
 
@@ -102,25 +103,25 @@ class SensorModel:
             return 0
 
         def Pall(zki, din, eta, ahit = self.alpha_hit, ashort = self.alpha_short, amax = self.alpha_max, arand = self.alpha_rand):
-            return ahit*Phit(zki, d=din) + ashort*Pshort(zki, d=din) + amax*Pmax(zki)+arand*Prand(zki)
+            return ahit*Phit(zki, eta, din) + ashort*Pshort(zki, din) + amax*Pmax(zki)+arand*Prand(zki)
         
         # column for each actual distance, row for each measured distance
         # val_list map the scale of dmin dmax to the actual value in the LUT, for d and zk, the list is the same (same range and delta)
-        val_list = range(zmin, zmax, self.table_width)
+        # we don't need val_list, after normalization, they will be the same
+        # val_list = np.linspace(zmin, zmax, self.table_width)
+        # val_list = range(self.table_width)
         for d_col in range(self.table_width):
 
             eta_sum = 0              # normalization factor for Phit 
             for zk_row in range(self.table_width):
-                d_actual = val_list[d_col]
-                zk_actual= val_list[zk_row]
-                eta_sum += Phit(zk_actual, d=d_actual)
+                eta_sum += Phit(zk_row, 1, d_col)
 
             for zk_row in range(self.table_width):
-                self.sensor_model_table[zk_row, d_col] = Pall(zk_actual, d_actual, 1/eta_sum)
+                self.sensor_model_table[zk_row, d_col] = Pall(zk_row, d_col, 1/eta_sum)
 
             # normalize the whole column
-            self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col]) 
-        raise NotImplementedError
+            self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col])
+        # print(self.sensor_model_table[0,:])
 
     def evaluate(self, particles, observation):
         """
@@ -147,26 +148,54 @@ class SensorModel:
             return
 
         ####################################
-        # TODO:
+        # how to calculate the distribution, avg or compare each one?
+
         # Evaluate the sensor model here!
         #
         # You will probably want to use this function
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle
-        val_list = range(self.zmin, self.zmax, self.table_width)
+        # val_list = range(self.zmin, self.zmax, self.table_width)
+
+        down_sample_index = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int)
+        down_sample_obs   = observation[down_sample_index]    # down sampled observation
+
+        # get scan data and normalize them
         scans = self.scan_sim.scan(particles)
-        probability = np.zeros(particles.shape[0])
-        for i in range(particles.shape[0]):
+        self.map_resolution = self.map.shape[0]          # TODO: map resolution
+        rospy.loginfo(self.map_resolution)
 
-            zki = particles[i, :2].dot(particles[i, :2])
-            d = observation[:2].dot(observation[:2])
+        # TODO: not sure is it correct to convert meter to pixel
+        scans /= (self.map_resolution*self.lidar_scale_to_map_scale)
+        observation /= (self.map_resolution*self.lidar_scale_to_map_scale)
+        np.clip(scans, 0, self.table_width)              # limit the x, y coordinate value to zmin, zmax (in pixel representation)
+        np.clip(observation, 0, self.table_width)
 
-            differencez = np.abs(zki-val_list)
-            indexz = differencez.argmin()
-            differenced = np.abs(zki-val_list)
-            indexd = differenced.argmin()
+        print(observation.shape)
+        col_d = np.array(observation)
+        # col_d = np.expand_dims(col_d, axis=0)
+        col_d = np.tile(col_d, (self.table_width,1))
+        print("col_d matrix dim", col_d.shape)
+        scans = np.array(scans, dtype=int)
+        col_d = np.array(scans, dtype=int)
+        probability_m = self.sensor_model_table[scans, col_d]
+        probability_vec = np.sum(np.log(probability_m), axis=1) # guarantee sum of the probability for each particle <= 1
 
-            probability[i] = self.sensor_model_table[indexz, indexd]
+        return probability_vec**self.squash
+        
+        # probability = np.zeros(particles.shape[0])
+
+        # for i in range(particles.shape[0]):
+
+        #     zki = particles[i, :2].dot(particles[i, :2])
+        #     d = observation[:2].dot(observation[:2])
+
+        #     differencez = np.abs(zki-val_list)
+        #     indexz = differencez.argmin()
+        #     differenced = np.abs(zki-val_list)
+        #     indexd = differenced.argmin()
+
+        #     probability[i] = self.sensor_model_table[indexz, indexd]
 
         ####################################
 
@@ -198,3 +227,72 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
+
+    # def precompute_sensor_model(self):
+    #     """
+    #     Generate and store a table which represents the sensor model.
+        
+    #     For each discrete computed range value, this provides the probability of 
+    #     measuring any (discrete) range. This table is indexed by the sensor model
+    #     at runtime by discretizing the measurements and computed ranges from
+    #     RangeLibc.
+    #     This table must be implemented as a numpy 2D array.
+
+    #     Compute the table based on class parameters alpha_hit, alpha_short,
+    #     alpha_max, alpha_rand, sigma_hit, and table_width.
+
+    #     args:
+    #         N/A
+        
+    #     returns:
+    #         No return type. Directly modify `self.sensor_model_table`.
+    #     """
+
+    #     zmin = self.zmin
+    #     zmax = self.zmax
+    #     sigma_hit = self.sigma_hit
+    #     eps = self.eps # for Pmax
+
+    #     def Phit(zki, eta, sigma=sigma_hit, d=7, zmax=zmax):
+    #         if zki>=0 and zki<=zmax:
+    #             return eta*np.sqrt(2*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2*sigma**2))
+    #         return 0
+
+    #     def Pshort(zki, d=7):
+    #         if zki>=0 and zki<d and d!=0:
+    #             return 2/d*(1-zki/d)
+    #         return 0
+
+    #     def Pmax(zki, zmax=zmax, eps=eps):
+    #         if zki==zmax:
+    #             return 1/eps
+    #         return 0
+
+    #     def Prand(zki, zmax=zmax):
+    #         if zki>=0 and zki<=zmax:
+    #             return 1/zmax
+    #         return 0
+
+    #     def Pall(zki, din, eta, ahit = self.alpha_hit, ashort = self.alpha_short, amax = self.alpha_max, arand = self.alpha_rand):
+    #         return ahit*Phit(zki, eta, d=din) + ashort*Pshort(zki, d=din) + amax*Pmax(zki)+arand*Prand(zki)
+        
+    #     # column for each actual distance, row for each measured distance
+    #     # val_list map the scale of dmin dmax to the actual value in the LUT, for d and zk, the list is the same (same range and delta)
+    #     # we don't need val_list, after normalization, they will be the same
+    #     # val_list = np.linspace(zmin, zmax, self.table_width)
+    #     # val_list = range(self.table_width)
+    #     for d_col in range(self.table_width):
+
+    #         eta_sum = 0              # normalization factor for Phit 
+    #         for zk_row in range(self.table_width):
+    #             # d_actual = val_list[d_col]
+    #             # zk_actual= val_list[zk_row]
+    #             eta_sum += Phit(zk_row, 1, d=d_col)
+
+    #         for zk_row in range(self.table_width):
+    #             self.sensor_model_table[zk_row, d_col] = Pall(zk_row, d_col, 1/eta_sum)
+
+    #         # normalize the whole column
+    #         self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col]) 
+    #     # raise NotImplementedError

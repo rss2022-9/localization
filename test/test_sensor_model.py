@@ -37,6 +37,10 @@ class TestSensorModel(unittest.TestCase):
         actual_table = self.sensor_model.sensor_model_table
 
         self.assertTrue(actual_table.shape, expected_table.shape)
+        for col in range(self.sensor_model.table_width):
+            print("number %d,\n", col)
+            print("error col \n", np.sum(actual_table[:,col]-expected_table[:,col]))
+            print("error row \n", np.sum(actual_table[col,:]-expected_table[col,:]))
         np.testing.assert_allclose(expected_table, actual_table, rtol=self.tol)
 
     def test_evaluate(self):

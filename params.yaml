@@ -7,6 +7,9 @@ num_particles: 200
 # so long as you downsample properly
 num_beams_per_particle: 100
 
+# 2D racecar simulator
+lidar_scale_to_map_scale: 1.0
+
 # The field of view centered around theta=0
 scan_field_of_view: 4.71 # radians
 
