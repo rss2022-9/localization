@@ -31,9 +31,9 @@ class SensorModel:
 
         self.zmin = 0
         self.zmax = self.table_width-1
-        self.eps = 1 # for Pmax
+        self.eps = 1.0 # for Pmax
         self.sigma_hit = 8.0
-        self.squash = 1/2.2   # avoid peak in the probablity
+        self.squash = 1.0/2.2   # avoid peak in the probablity
         ####################################
 
         # Precompute the sensor model table
@@ -84,22 +84,22 @@ class SensorModel:
 
         def Phit(zki, eta, d, sigma=sigma_hit, zmax=zmax):
             if zki>=0 and zki<=zmax:
-                return eta/np.sqrt(2*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2*sigma**2))
+                return eta/np.sqrt(2.0*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2.0*sigma**2))
             return 0
 
         def Pshort(zki, d):
             if zki>=0 and zki<=d and d!=0:
-                return 2/d*(1-zki/d)
+                return 2.0/d*(1-zki/d)
             return 0
 
         def Pmax(zki, zmax=zmax, eps=eps):
             if zki==zmax:
-                return 1/eps
+                return 1.0/eps
             return 0
 
         def Prand(zki, zmax=zmax):
             if zki>=0 and zki<=zmax:
-                return 1/zmax
+                return 1.0/zmax
             return 0
 
         def Pall(zki, din, eta, ahit = self.alpha_hit, ashort = self.alpha_short, amax = self.alpha_max, arand = self.alpha_rand):
@@ -112,12 +112,12 @@ class SensorModel:
         # val_list = range(self.table_width)
         for d_col in range(self.table_width):
 
-            eta_sum = 0              # normalization factor for Phit 
+            eta_sum = 0.0              # normalization factor for Phit 
             for zk_row in range(self.table_width):
-                eta_sum += Phit(zk_row, 1, d_col)
+                eta_sum += Phit(float(zk_row), 1.0, float(d_col))
 
             for zk_row in range(self.table_width):
-                self.sensor_model_table[zk_row, d_col] = Pall(zk_row, d_col, 1/eta_sum)
+                self.sensor_model_table[zk_row, d_col] = Pall(float(zk_row), float(d_col), 1.0/float(eta_sum))
 
             # normalize the whole column
             self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col])
