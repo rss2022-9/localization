@@ -40,7 +40,6 @@ class ParticleFilter:
         self.size = (self.num_particles,3)
         self.particles = np.zeros(self.size)
         self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
-        print("particles!!!!")
 
         self.odom = Odometry()
         self.marker = Marker()
@@ -109,13 +108,11 @@ class ParticleFilter:
         self.turn_msg.drive.steering_angle = 0.2
         self.pub.publish(self.turn_msg)   
 
-        observation = np.copy(sensdata.ranges).flatten()
+        observation = np.copy(sensdata.ranges)
         probs = self.normalize(self.sensor_model.evaluate(self.particles,observation))
-        #print(np.sum(probs))
-        size = self.particles.shape[0]
-        indices = np.arange(size)
-        new_particles = self.particles[np.random.choice(indices,size=size,p=probs)]
-        print(new_particles)
+        arr = self.particles
+        size = arr.shape[0]
+        new_particles = arr[np.random.choice(arr.shape[0],size=size,p=probs),:]
         self.update_particles(new_particles)
         
     def normalize(self,v):
