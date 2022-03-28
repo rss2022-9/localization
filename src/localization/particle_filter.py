@@ -72,6 +72,7 @@ class ParticleFilter:
             odom_quat = tf.transformations.quaternion_from_euler(0, 0, o)
             self.odom.pose.pose = Pose(Point(x,y,0.0), Quaternion(*odom_quat))
             self.odom_pub.publish(self.odom)
+
             VisualizationTools.plot_line(new_particles[:,0], new_particles[:,1], self.line_pub, frame="/map")
             self.particles = new_particles
         finally:
@@ -99,21 +100,29 @@ class ParticleFilter:
         self.update_particles(new_particles)
 
     def calcprobs(self,sensdata):
-        # downsample the data
-        down_sample_index        = np.array(np.linspace(0, sensdata.data.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
-        observation_down_sample  = sensdata.data.ranges[down_sample_index] 
-
+        # Down sample data
+        down_sample_index        = np.array(np.linspace(0, sensdata.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
+        observation_down_sample  = sensdata.ranges[down_sample_index] 
 
         self.turn_msg.header.stamp = rospy.Time.now()
         self.turn_msg.drive.speed = 1
         self.turn_msg.drive.steering_angle = 0.2
         self.pub.publish(self.turn_msg)   
-        """
+
         observation = np.copy(sensdata.ranges).flatten()
-        probs = self.sensor_model.evaluate(self.particles,observation)
-        new_particles = self.particles[np.random.choice(self.particles.shape[0],size=self.num_particles,p=probs)]
+        probs = self.normalize(self.sensor_model.evaluate(self.particles,observation))
+        #print(np.sum(probs))
+        size = self.particles.shape[0]
+        indices = np.arange(size)
+        new_particles = self.particles[np.random.choice(indices,size=size,p=probs)]
+        print(new_particles)
         self.update_particles(new_particles)
-        """
+        
+    def normalize(self,v):
+        norm = np.sum(v)
+        if norm == 0: 
+           return v
+        return v / norm
 
 
 if __name__ == "__main__":
