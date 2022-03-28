@@ -163,7 +163,7 @@ class SensorModel:
         # get scan data and normalize them
         scans = self.scan_sim.scan(particles)
         self.map_resolution = self.map.shape[0]          # TODO: map resolution
-        rospy.loginfo(self.map_resolution)
+        #rospy.loginfo(self.map_resolution)
 
         # TODO: not sure is it correct to convert meter to pixel
         scans /= (self.map_resolution*self.lidar_scale_to_map_scale)
@@ -171,11 +171,11 @@ class SensorModel:
         np.clip(scans, 0, self.table_width)              # limit the x, y coordinate value to zmin, zmax (in pixel representation)
         np.clip(observation, 0, self.table_width)
 
-        print(observation.shape)
+        #print(observation.shape)
         col_d = np.array(observation)
         # col_d = np.expand_dims(col_d, axis=0)
         col_d = np.tile(col_d, (self.table_width,1))
-        print("col_d matrix dim", col_d.shape)
+        #print("col_d matrix dim", col_d.shape)
         scans = np.array(scans, dtype=int)
         col_d = np.array(scans, dtype=int)
         probability_m = self.sensor_model_table[scans, col_d]
