@@ -76,7 +76,7 @@ class ParticleFilter:
         new_particles = self.motion_model.evaluate(self.particles,inpodom)
         self.update_particles(new_particles)
         
-    def calcprobs(self,sensdata):
+    def calcprobs(self,sensdata): 
         probs = self.sensor_model.evaluate(self.particles,np.copy(sensdata.ranges))
         new_particles = self.particles[np.random.choice(self.particles.shape[0],self.num_particles)]
         self.update_particles(new_particles)

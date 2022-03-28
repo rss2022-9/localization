@@ -165,24 +165,19 @@ class SensorModel:
         # down_sample_obs   = observation[down_sample_index]    # down sampled observation
         
         # down sample observation equally to # beams per particle
-        down_sample_index        = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
-        observation_down_sample  = observation[down_sample_index]                                    # down sample observation
-        observation_down_sample /= (self.map_resolution*self.lidar_scale_to_map_scale)               # convert meters to pixels
+        # down_sample_index        = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
+        # observation_down_sample  = observation[down_sample_index]                                    # down sample observation
+        observation_down_sample  = observation / (self.map_resolution*self.lidar_scale_to_map_scale)               # convert meters to pixels
         observation_matrix       = np.tile(np.array(observation_down_sample), (num_particles,1))     # repeat down_sampled observation in row
-        np.clip(observation_matrix, self.zmin, self.zmax)                                            # limit the x, y coordinate value to zmin, zmax (in pixel representation)
-        observation_matrix = np.array(observation_matrix, dtype=int)                                 # convert to int as array indicies
+        observation_matrix       = np.clip(observation_matrix, self.zmin, self.zmax)                 # limit the x, y coordinate value to zmin, zmax (in pixel representation)
+        observation_matrix = np.rint(observation_matrix).astype(np.uint16) # np.array(observation_matrix, dtype=int)                                 # convert to int as array indicies
 
         scans = self.scan_sim.scan(particles)                          # get ray-casting
         scans /= (self.map_resolution*self.lidar_scale_to_map_scale)   # convert meters to pixels
-        np.clip(scans, self.zmin, self.zmax)                           # limit the x, y coordinate value to zmin, zmax (in pixel representation)
-        scans = np.array(scans, dtype=int)
-
-        # print(observation.shape)
-        # observation_matrix = np.array(observation)
-        # col_d = np.expand_dims(col_d, axis=0)
-        # print("col_d matrix dim", col_d.shape)
+        scans = np.clip(scans, self.zmin, self.zmax)                   # limit the x, y coordinate value to zmin, zmax (in pixel representation)
+        scans = np.rint(scans).astype(np.uint16)
         
-        probability_m = self.sensor_model_table[scans, observation_matrix]     # scans-particle measurement k-row; observation-real lidar d-col 
+        probability_m = self.sensor_model_table[observation_matrix, scans]     # scans-particle measurement k-row; observation-real lidar d-col 
         # probability_vec = np.sum(np.log(probability_m), axis=1)              # guarantee sum of the probability for each particle <= 1
         # probability_vec = np.sum(probability_m,axis=1)                         # sum all the probablity for a particle
         probability_vec   = np.prod(probability_m, axis=1)
