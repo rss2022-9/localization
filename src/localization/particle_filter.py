@@ -39,7 +39,9 @@ class ParticleFilter:
         self.num_particles = rospy.get_param("~num_particles")
         self.size = (self.num_particles,3)
         self.particles = np.zeros(self.size)
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
         print("particles!!!!")
+
         self.odom = Odometry()
         self.marker = Marker()
         self.line_pub = rospy.Publisher(cloud_topic, Marker, queue_size=1)
@@ -97,6 +99,11 @@ class ParticleFilter:
         self.update_particles(new_particles)
 
     def calcprobs(self,sensdata):
+        # downsample the data
+        down_sample_index        = np.array(np.linspace(0, sensdata.data.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
+        observation_down_sample  = sensdata.data.ranges[down_sample_index] 
+
+
         self.turn_msg.header.stamp = rospy.Time.now()
         self.turn_msg.drive.speed = 1
         self.turn_msg.drive.steering_angle = 0.2
