@@ -108,6 +108,7 @@ class TestSensorModel(unittest.TestCase):
 
     def test_precompute_sensor_model(self):
         expected_table = np.array(TEST_PRECOMPUTED_TABLE)
+        print(np.min(expected_table))
         actual_table = self.sensor_model.sensor_model_table
 
         self.assertTrue(actual_table.shape, expected_table.shape)
@@ -125,10 +126,19 @@ class TestSensorModel(unittest.TestCase):
         # print(np.sum(np.abs(aa[0,:])), np.sum(np.abs(aa[1,:])), np.max(np.abs(aa[0,:])), np.max(np.abs(aa[1,:])))
         np.testing.assert_allclose(expected_table, actual_table, rtol=self.tol)
 
+    def test_evaluate(self):
+        expected_table = np.array(TEST_SENSOR_MODEL_OUTPUT_PROBABILITIES)
+        table_norm = expected_table/np.sum(expected_table)
+        print(table_norm)
+        print(np.max(table_norm))
+        print(np.sum(table_norm))
+        # print(np.sum(expected_table))
+
 
 if __name__ == "__main__":
     # rospy.init_node("sensor_model_test")
     # rostest.rosrun("localization", 'test_sensor_model', TestSensorModel)
     model = TestSensorModel()
-    model.test_precompute_sensor_model()
+    # model.test_precompute_sensor_model()
+    model.test_evaluate()
 

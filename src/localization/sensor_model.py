@@ -9,11 +9,11 @@ from tf.transformations import quaternion_from_euler
 
 class SensorModel:
 
-
     def __init__(self):
         # Fetch parameters
         self.map_topic = rospy.get_param("~map_topic")
         self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
+        self.num_particles = rospy.get_param("~num_particles")
         self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
         self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
         self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
@@ -146,6 +146,7 @@ class SensorModel:
 
         if not self.map_set:
             return
+        num_particles = particles.shape[0]
 
         ####################################
         # how to calculate the distribution, avg or compare each one?
@@ -157,31 +158,36 @@ class SensorModel:
         # This produces a matrix of size N x num_beams_per_particle
         # val_list = range(self.zmin, self.zmax, self.table_width)
 
-        down_sample_index = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int)
-        down_sample_obs   = observation[down_sample_index]    # down sampled observation
+        # down sample all the measurements of particle to length of observation data
+        # TODO: make sure observation is row vec
+        # down_sample_matrix= np.tile(down_sample_index, (particles.shape[0], 1))                                   # broadcast to matrix, which is the col indices
+        # col, row = np.meshgrid(np.arange(observation.shape[0]), np.arange(particles.shape[0])) # x-> col, y->row
+        # down_sample_obs   = observation[down_sample_index]    # down sampled observation
+        
+        # down sample observation equally to # beams per particle
+        down_sample_index        = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
+        observation_down_sample  = observation[down_sample_index]                                    # down sample observation
+        observation_down_sample /= (self.map_resolution*self.lidar_scale_to_map_scale)               # convert meters to pixels
+        observation_matrix       = np.tile(np.array(observation_down_sample), (num_particles,1))     # repeat down_sampled observation in row
+        np.clip(observation_matrix, self.zmin, self.zmax)                                            # limit the x, y coordinate value to zmin, zmax (in pixel representation)
+        observation_matrix = np.array(observation_matrix, dtype=int)                                 # convert to int as array indicies
 
-        # get scan data and normalize them
-        scans = self.scan_sim.scan(particles)
-        self.map_resolution = self.map.shape[0]          # TODO: map resolution
-        rospy.loginfo(self.map_resolution)
-
-        # TODO: not sure is it correct to convert meter to pixel
-        scans /= (self.map_resolution*self.lidar_scale_to_map_scale)
-        observation /= (self.map_resolution*self.lidar_scale_to_map_scale)
-        np.clip(scans, 0, self.table_width)              # limit the x, y coordinate value to zmin, zmax (in pixel representation)
-        np.clip(observation, 0, self.table_width)
-
-        print(observation.shape)
-        col_d = np.array(observation)
-        # col_d = np.expand_dims(col_d, axis=0)
-        col_d = np.tile(col_d, (self.table_width,1))
-        print("col_d matrix dim", col_d.shape)
+        scans = self.scan_sim.scan(particles)                          # get ray-casting
+        scans /= (self.map_resolution*self.lidar_scale_to_map_scale)   # convert meters to pixels
+        np.clip(scans, self.zmin, self.zmax)                           # limit the x, y coordinate value to zmin, zmax (in pixel representation)
         scans = np.array(scans, dtype=int)
-        col_d = np.array(scans, dtype=int)
-        probability_m = self.sensor_model_table[scans, col_d]
-        probability_vec = np.sum(np.log(probability_m), axis=1) # guarantee sum of the probability for each particle <= 1
 
-        return probability_vec**self.squash
+        # print(observation.shape)
+        # observation_matrix = np.array(observation)
+        # col_d = np.expand_dims(col_d, axis=0)
+        # print("col_d matrix dim", col_d.shape)
+        
+        probability_m = self.sensor_model_table[scans, observation_matrix]     # scans-particle measurement k-row; observation-real lidar d-col 
+        # probability_vec = np.sum(np.log(probability_m), axis=1)              # guarantee sum of the probability for each particle <= 1
+        # probability_vec = np.sum(probability_m,axis=1)                         # sum all the probablity for a particle
+        probability_vec   = np.prod(probability_m, axis=1)
+        probability_vec   = probability_vec**self.squash
+        return probability_vec # /np.sum(probability_vec)
         
         # probability = np.zeros(particles.shape[0])
 
@@ -203,6 +209,7 @@ class SensorModel:
         # Convert the map to a numpy array
         self.map = np.array(map_msg.data, np.double)/100.
         self.map = np.clip(self.map, 0, 1)
+        self.map_resolution = map_msg.info.resolution
 
         # Convert the origin to a tuple
         origin_p = map_msg.info.origin.position
@@ -227,72 +234,3 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
-
-
-    # def precompute_sensor_model(self):
-    #     """
-    #     Generate and store a table which represents the sensor model.
-        
-    #     For each discrete computed range value, this provides the probability of 
-    #     measuring any (discrete) range. This table is indexed by the sensor model
-    #     at runtime by discretizing the measurements and computed ranges from
-    #     RangeLibc.
-    #     This table must be implemented as a numpy 2D array.
-
-    #     Compute the table based on class parameters alpha_hit, alpha_short,
-    #     alpha_max, alpha_rand, sigma_hit, and table_width.
-
-    #     args:
-    #         N/A
-        
-    #     returns:
-    #         No return type. Directly modify `self.sensor_model_table`.
-    #     """
-
-    #     zmin = self.zmin
-    #     zmax = self.zmax
-    #     sigma_hit = self.sigma_hit
-    #     eps = self.eps # for Pmax
-
-    #     def Phit(zki, eta, sigma=sigma_hit, d=7, zmax=zmax):
-    #         if zki>=0 and zki<=zmax:
-    #             return eta*np.sqrt(2*np.pi*sigma**2)*np.exp(-(zki-d)**2/(2*sigma**2))
-    #         return 0
-
-    #     def Pshort(zki, d=7):
-    #         if zki>=0 and zki<d and d!=0:
-    #             return 2/d*(1-zki/d)
-    #         return 0
-
-    #     def Pmax(zki, zmax=zmax, eps=eps):
-    #         if zki==zmax:
-    #             return 1/eps
-    #         return 0
-
-    #     def Prand(zki, zmax=zmax):
-    #         if zki>=0 and zki<=zmax:
-    #             return 1/zmax
-    #         return 0
-
-    #     def Pall(zki, din, eta, ahit = self.alpha_hit, ashort = self.alpha_short, amax = self.alpha_max, arand = self.alpha_rand):
-    #         return ahit*Phit(zki, eta, d=din) + ashort*Pshort(zki, d=din) + amax*Pmax(zki)+arand*Prand(zki)
-        
-    #     # column for each actual distance, row for each measured distance
-    #     # val_list map the scale of dmin dmax to the actual value in the LUT, for d and zk, the list is the same (same range and delta)
-    #     # we don't need val_list, after normalization, they will be the same
-    #     # val_list = np.linspace(zmin, zmax, self.table_width)
-    #     # val_list = range(self.table_width)
-    #     for d_col in range(self.table_width):
-
-    #         eta_sum = 0              # normalization factor for Phit 
-    #         for zk_row in range(self.table_width):
-    #             # d_actual = val_list[d_col]
-    #             # zk_actual= val_list[zk_row]
-    #             eta_sum += Phit(zk_row, 1, d=d_col)
-
-    #         for zk_row in range(self.table_width):
-    #             self.sensor_model_table[zk_row, d_col] = Pall(zk_row, d_col, 1/eta_sum)
-
-    #         # normalize the whole column
-    #         self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col]) 
-    #     # raise NotImplementedError
