@@ -35,6 +35,7 @@ class ParticleFilter:
 
         # Initialize important variables
         self.lock = Lock()
+        self.last_time = 0.0;
         self.num_particles = rospy.get_param("~num_particles")
         self.size = (self.num_particles,3)
         self.particles = np.zeros(self.size)
@@ -89,7 +90,9 @@ class ParticleFilter:
         self.update_particles(new_particles)
 
     def updposes(self,odom):
-        inpodom = [odom.twist.twist.linear.x,odom.twist.twist.linear.y,odom.twist.twist.angular.z]
+        dt = rospy.get_time() - self.last_time
+        self.last_time = rospy.get_time()
+        inpodom = [odom.twist.twist.linear.x*dt,odom.twist.twist.linear.y*dt,odom.twist.twist.angular.z*dt]
         new_particles = self.motion_model.evaluate(self.particles,inpodom)
         self.update_particles(new_particles)
 
