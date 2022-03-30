@@ -37,7 +37,7 @@ class ParticleFilter:
 
         # Initialize important variables
         self.lock = Lock()
-        self.last_time = 0.0;
+        self.last_time = None;
         self.num_particles = rospy.get_param("~num_particles", 200)
         self.size = (self.num_particles,3)
         self.particles = np.zeros(self.size)
@@ -90,7 +90,8 @@ class ParticleFilter:
         if self.map_initialized:
             X = clickpose.pose.pose.position.x
             Y = clickpose.pose.pose.position.y
-            R = 5.0
+            w = clickpose.pose.pose.orientation.w
+            R = 0.1
             S = self.num_particles
             phi = np.random.random_sample((S,))*2*np.pi
             rad = np.random.random_sample((S,))*R
@@ -108,21 +109,21 @@ class ParticleFilter:
             dt = rospy.get_time() - self.last_time
             self.last_time = rospy.get_time()
             inpodom = [odom.twist.twist.linear.x*dt,odom.twist.twist.linear.y*dt,odom.twist.twist.angular.z*dt]
-            new_particles = self.motion_model.evaluate(self.particles,inpodom)
+            new_particles = self.motion_model.evaluate(self.particles,inpodom,noise=0)
             self.update_particles(new_particles)
         else:
             return
 
 
     def calcprobs(self,sensdata):
-        
+        pass
         """
         self.turn_msg.header.stamp = rospy.Time.now()
         self.turn_msg.drive.speed = 1
         self.turn_msg.drive.steering_angle = 0.2
         self.pub.publish(self.turn_msg)   
         """
-        
+        """
         if self.pos_initialized:
             # Down sample data
             down_sample_index        = np.array(np.linspace(0, sensdata.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
@@ -135,6 +136,7 @@ class ParticleFilter:
             self.update_particles(new_particles)
         else:
             return
+            """
         
 
     def normalize(self,v):
