@@ -3,6 +3,7 @@
 import numpy as np
 import scipy
 import scipy.stats
+from sklearn.utils import resample
 import rospy
 import tf
 
@@ -137,7 +138,32 @@ class ParticleFilter:
         else:
             return
             """
-        
+
+    def low_variance_resample(self, sensdata):
+        """
+        Reference: Probablistic Robotics
+        By Zhenyang
+
+        The basic idea is that instead of selecting samples independently of 
+        each other in the resampling process the selection involves a sequential stochastic process.
+        """
+        # Down sample lidar data
+        down_sample_index        = np.array(np.linspace(0, sensdata.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
+        observation  = sensdata.ranges[down_sample_index] 
+        weights = self.sensor_model.evaluate(self.particles, observation)
+
+        r = np.random.rand()/self.num_particles # generate a random number
+        c = weights[0]
+        i = 0
+        resample_particle = [] # np.zeros(self.size)
+        for m in range(self.num_particles):
+            U = r + m/self.num_particles
+            while U > c:
+                i += 1
+                c += weights[i]
+            resample_particle.append(self.particles[i,:])
+
+        self.particles = np.array(resample_particle)  # make sure the list to array conversion is right
 
     def normalize(self,v):
         norm = np.sum(v)

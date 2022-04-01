@@ -167,7 +167,7 @@ class SensorModel:
         # down sample observation equally to # beams per particle
         # down_sample_index        = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
         # observation_down_sample  = observation[down_sample_index]                                    # down sample observation
-        observation_down_sample  = observation / (self.map_resolution*self.lidar_scale_to_map_scale)               # convert meters to pixels
+        observation_down_sample  = observation / (self.map_resolution*self.lidar_scale_to_map_scale)  # convert meters to pixels
         observation_matrix       = np.tile(np.array(observation_down_sample), (num_particles,1))     # repeat down_sampled observation in row
         observation_matrix       = np.clip(observation_matrix, self.zmin, self.zmax)                 # limit the x, y coordinate value to zmin, zmax (in pixel representation)
         observation_matrix = np.rint(observation_matrix).astype(np.uint16) # np.array(observation_matrix, dtype=int)                                 # convert to int as array indicies
