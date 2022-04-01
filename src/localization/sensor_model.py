@@ -5,8 +5,6 @@ import tf
 from tf.transformations import quaternion_from_euler
 from scan_simulator_2d import PyScanSimulator2D
 from nav_msgs.msg import OccupancyGrid
-from scipy import signal
-
 
 class SensorModel:
 
@@ -34,7 +32,7 @@ class SensorModel:
         self.zmax = self.table_width-1
         self.eps = 1.0 # for Pmax
         self.sigma_hit = 8.0
-        self.squash = 1.0/2.3   # avoid peak in the probablity
+        self.squash = 1.0/2.2   # avoid peak in the probablity 10.2
         ####################################
 
         # Precompute the sensor model table
@@ -42,21 +40,12 @@ class SensorModel:
         self.precompute_sensor_model()
 
         # Create a simulated laser scan
-        self.scan_sim = PyScanSimulator2D(
-                self.num_beams_per_particle,
-                self.scan_field_of_view,
-                0, # This is not the simulator, don't add noise
-                0.01, # This is used as an epsilon
-                self.scan_theta_discretization) 
+        self.scan_sim = PyScanSimulator2D(self.num_beams_per_particle, self.scan_field_of_view, 0, 0.01, self.scan_theta_discretization) 
         self.scale = 0
         # Subscribe to the map
         self.map = None
         self.map_set = False
-        rospy.Subscriber(
-                self.map_topic,
-                OccupancyGrid,
-                self.map_callback,
-                queue_size=1)
+        rospy.Subscriber(self.map_topic, OccupancyGrid, self.map_callback, queue_size=1)
 
     def precompute_sensor_model(self):
         """
@@ -111,8 +100,8 @@ class SensorModel:
         # we don't need val_list, after normalization, they will be the same
         # val_list = np.linspace(zmin, zmax, self.table_width)
         # val_list = range(self.table_width)
-        for d_col in range(self.table_width):
 
+        for d_col in range(self.table_width):
             eta_sum = 0.0              # normalization factor for Phit 
             for zk_row in range(self.table_width):
                 eta_sum += Phit(float(zk_row), 1.0, float(d_col))
@@ -158,13 +147,12 @@ class SensorModel:
         # val_list = range(self.zmin, self.zmax, self.table_width)
         
         num_particles = particles.shape[0]
-        #observation  = signal.resample(observation,self.num_beams_per_particle) # Down Sample
-        
+
         observation_matrix = np.tile(np.array(observation), (num_particles,1)) # broadcast to matrix, which is the col indices
-        observation_matrix = self.scale_clip(observation_matrix)
+        observation_matrix = self.scale_clip(observation_matrix) # change meters to pixels and limit x,y coords
 
         scans = self.scan_sim.scan(particles) # get ray-casting
-        scans = self.scale_clip(scans)
+        scans = self.scale_clip(scans) # change meters to pixels and limit x,y coords
 
         probability_m = self.sensor_model_table[observation_matrix, scans] # scans-particle measurement k-row; observation-real lidar d-col
         probability_vec   = np.prod(probability_m, axis=1)**self.squash

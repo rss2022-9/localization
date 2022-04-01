@@ -56,7 +56,7 @@ class ParticleFilter:
     def map_init(self, map):
         self.map_initialized = True
 
-    def update_particles(self, new_particles):
+    def pub_stuff(self, new_particles):
         x = np.mean(new_particles[:,0])
         y = np.mean(new_particles[:,1])
         o = circmean(new_particles[:,2])
@@ -65,8 +65,8 @@ class ParticleFilter:
         self.odom_msg.header.frame_id = "/map"
         self.odom_msg.pose.pose = Pose(Point(x,y,0.0), Quaternion(*odom_quat))
         self.odom_pub.publish(self.odom_msg)
-        VisualizationTools.plot_line(new_particles[:,0], new_particles[:,1], self.line_pub, frame="/map")
-        self.particles = new_particles
+        VisualizationTools.plot_cloud(new_particles[:,0], new_particles[:,1], self.line_pub, frame="/map")
+        
 
     def initposes(self, clickpose):
         if self.map_initialized:
@@ -74,7 +74,7 @@ class ParticleFilter:
             Y = clickpose.pose.pose.position.y
             w = clickpose.pose.pose.orientation.w
             o = 2*np.arccos(w)
-            R = 10
+            R = 0.2
             S = self.num_particles
             phi = np.random.random_sample((S,))*2*np.pi
             rad = np.random.random_sample((S,))*R
@@ -82,8 +82,8 @@ class ParticleFilter:
             ylist = Y + rad*np.sin(phi)
             olist = o*np.ones((S,))
             new_particles = np.column_stack((xlist,ylist,olist))
-            #self.particles = new_particles
-            self.update_particles(new_particles)
+            self.particles = new_particles
+            self.pub_stuff(new_particles)
             self.pos_initialized = True
             
         else:
@@ -98,8 +98,8 @@ class ParticleFilter:
             self.last_time = rospy.get_time()
             inpodom = [odom.twist.twist.linear.x*dt,odom.twist.twist.linear.y*dt,odom.twist.twist.angular.z*dt]
             new_particles = self.motion_model.evaluate(self.particles,inpodom,noise=1)
-            #self.particles = new_particles
-            self.update_particles(new_particles)
+            self.particles = new_particles
+            self.pub_stuff(new_particles)
         else:
             return
     """
@@ -141,15 +141,8 @@ class ParticleFilter:
                     c += weights[i]
                 resample_particle.append(self.particles[i,:])
             new_particles = np.array(resample_particle)
-            #self.particles = new_particle()  # make sure the list to array conversion is right
-            self.update_particles(new_particles)
-
-            
-    def normalize(self,v):
-        norm = np.sum(v)
-        if norm == 0: 
-           return v
-        return v / norm
+            self.particles = new_particles
+            self.pub_stuff(new_particles)
 
 if __name__ == "__main__":
     rospy.init_node("particle_filter")

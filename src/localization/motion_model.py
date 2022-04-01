@@ -5,7 +5,7 @@ class MotionModel:
     def __init__(self):
         pass
 
-    def evaluate(self, particles, odometry, noise=0):
+    def evaluate(self, particles, odometry, noise=1):
 
         S = particles.shape[0] # Get number of particles
 
