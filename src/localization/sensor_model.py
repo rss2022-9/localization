@@ -158,7 +158,7 @@ class SensorModel:
         # val_list = range(self.zmin, self.zmax, self.table_width)
         
         num_particles = particles.shape[0]
-        observation  = signal.resample(observation,self.num_beams_per_particle) # Down Sample
+        #observation  = signal.resample(observation,self.num_beams_per_particle) # Down Sample
         
         observation_matrix = np.tile(np.array(observation), (num_particles,1)) # broadcast to matrix, which is the col indices
         observation_matrix = self.scale_clip(observation_matrix)
