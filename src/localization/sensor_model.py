@@ -34,7 +34,7 @@ class SensorModel:
         self.zmax = self.table_width-1
         self.eps = 1.0 # for Pmax
         self.sigma_hit = 8.0
-        self.squash = 1.0/2.5   # avoid peak in the probablity
+        self.squash = 1.0/2.3   # avoid peak in the probablity
         ####################################
 
         # Precompute the sensor model table

@@ -10,9 +10,9 @@ class MotionModel:
         S = particles.shape[0] # Get number of particles
 
         if noise: # Adding noise to the odometry
-            dx = odometry[0] - np.random.normal(0.01, size=(S,))
-            dy = odometry[1] - np.random.normal(0.01, size=(S,))
-            do = odometry[2] - np.random.normal(0.01, size=(S,))
+            dx = np.random.normal(loc=odometry[0], scale = 0.01, size=(S,))
+            dy = np.random.normal(loc=odometry[1], scale = 0.01, size=(S,))
+            do = np.random.normal(loc=odometry[2], scale = 0.01, size=(S,))
         else:
             dx = odometry[0]
             dy = odometry[1]
