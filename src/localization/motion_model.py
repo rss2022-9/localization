@@ -17,8 +17,8 @@ class MotionModel:
 
         w_x = particles[:,0]
         w_y = particles[:,1]
-        w_o = particles[:,2]
-
+        w_o = particles[:,2] 
+ 
         orot1 = np.arctan2(dy,dx)
         otran = np.linalg.norm([dx,dy],axis=0)
         orot2 = do
