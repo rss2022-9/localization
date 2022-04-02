@@ -1,22 +1,19 @@
 import numpy as np
+import rospy
 
 class MotionModel:
 
     def __init__(self):
-        pass
+        self.dist_sd = rospy.get_param("~distance_sd", 0.01)
+        self.angl_sd = rospy.get_param("~angle_sd", 0.01)
 
     def evaluate(self, particles, odometry, noise=1):
 
         S = particles.shape[0] # Get number of particles
 
-        if noise: # Adding noise to the odometry
-            dx = np.random.normal(loc=odometry[0], scale = 0.01, size=(S,))
-            dy = np.random.normal(loc=odometry[1], scale = 0.01, size=(S,))
-            do = np.random.normal(loc=odometry[2], scale = 0.01, size=(S,))
-        else:
-            dx = odometry[0]
-            dy = odometry[1]
-            do = odometry[2]
+        dx = np.random.normal(loc=odometry[0], scale = self.dist_sd*noise, size=(S,))
+        dy = np.random.normal(loc=odometry[1], scale = self.dist_sd*noise, size=(S,))
+        do = np.random.normal(loc=odometry[2], scale = self.angl_sd*noise, size=(S,))
 
         w_x = particles[:,0]
         w_y = particles[:,1]

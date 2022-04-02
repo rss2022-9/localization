@@ -85,9 +85,6 @@ class ParticleFilter:
             self.particles = new_particles
             self.pub_stuff(new_particles)
             self.pos_initialized = True
-            
-        else:
-            return
 
     def apply_odom(self,odom):
         if self.map_initialized and self.pos_initialized:
@@ -100,8 +97,6 @@ class ParticleFilter:
             new_particles = self.motion_model.evaluate(self.particles,inpodom,noise=1)
             self.particles = new_particles
             self.pub_stuff(new_particles)
-        else:
-            return
     """
     def calcprobs(self,sensdata):
         if self.map_initialized and self.pos_initialized:
@@ -122,24 +117,36 @@ class ParticleFilter:
             The basic idea is that instead of selecting samples independently of 
             each other in the resampling process the selection involves a sequential stochastic process.
             """
-            # Down sample lidar data
+            
             #down_sample_index        = np.array(np.linspace(0, sensdata.ranges.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
             #observation  = sensdata.ranges[down_sample_index]
 
+            # Down sample lidar data
             observation  = signal.resample(sensdata.ranges,self.num_beams_per_particle) # Down Sample
             weights = self.sensor_model.evaluate(self.particles, observation)
             weights = weights/np.sum(weights)
 
-            r = np.random.rand()/float(self.num_particles) # generate a random number
+            r = np.random.rand()/self.num_particles # generate a random number
             c = weights[0]
             i = 0
-            resample_particle = [] # np.zeros(self.size)
+            resample_particle = []
+            
+            weights_cum = np.cumsum(weights)
+            """
+            tresample_particle = []
+            tm = np.arange(self.num_particles, dtype = float)
+            tU = tm/float(self.num_particles) + r
+            ti = np.argmax(weights_cum >= tU)
+
+            tresample_particle = self.particles[ti,:]
+            print(ti)
+            """
+
             for m in range(self.num_particles):
                 U = r + float(m)/float(self.num_particles)
-                while U > c:
-                    i += 1
-                    c += weights[i]
+                i = np.argmax(weights_cum >= U)            
                 resample_particle.append(self.particles[i,:])
+
             new_particles = np.array(resample_particle)
             self.particles = new_particles
             self.pub_stuff(new_particles)
