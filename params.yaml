@@ -25,7 +25,7 @@ odom_topic: "/odom"
 particle_filter_frame: "/base_link_pf"
 
 # Standard Deviations for motion noise
-dist_sd: 0.01
+dist_sd: 1.5
 angl_sd: 0.01
 
 # Squash of probability distribution
