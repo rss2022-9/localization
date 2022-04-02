@@ -17,12 +17,12 @@ class MotionModel:
 
         w_x = particles[:,0]
         w_y = particles[:,1]
-        w_o = particles[:,2] 
+        w_o = particles[:,2]
  
         orot1 = np.arctan2(dy,dx)
         otran = np.linalg.norm([dx,dy],axis=0)
         orot2 = do
-        
+
         x_new = w_x + otran*np.cos(orot1 + w_o)
         y_new = w_y + otran*np.sin(orot1 + w_o)
         o_new = w_o + orot2
