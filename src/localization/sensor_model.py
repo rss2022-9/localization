@@ -16,7 +16,7 @@ class SensorModel:
         self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization", 500)
         self.scan_field_of_view = rospy.get_param("~scan_field_of_view", 4.71)
         self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale", 1.0)
-
+        squash_denom = rospy.get_param("~squash_denom", 2.2)
         ####################################
         # TODO
         # Adjust these parameters
@@ -32,7 +32,7 @@ class SensorModel:
         self.zmax = self.table_width-1
         self.eps = 1.0 # for Pmax
         self.sigma_hit = 8.0
-        self.squash = 1.0/2.2   # avoid peak in the probablity 10.2
+        self.squash = 1.0/squash_denom   # avoid peak in the probablity 10.2
         ####################################
 
         # Precompute the sensor model table
