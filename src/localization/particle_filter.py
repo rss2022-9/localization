@@ -33,7 +33,7 @@ class ParticleFilter:
         self.num_particles = rospy.get_param("~num_particles", 200)
         scan_topic = rospy.get_param("~scan_topic", "/scan")
         odom_topic = rospy.get_param("~odom_topic", "/odom")
-        cloud_topic = "/cloud"
+        cloud_topic = "/pf/cloud"
         self.kidnapped = rospy.get_param("~is_kidnapped", False)
         # Initialize the models
         self.motion_model = MotionModel()
