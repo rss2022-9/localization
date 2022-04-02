@@ -74,9 +74,14 @@ class ParticleFilter:
 
             height = (map_msg.info.height *  map_msg.info.resolution)
             width = (map_msg.info.width * map_msg.info.resolution)
-            xlist = origin_x - np.random.random_sample((S,))*width
+
             ylist = origin_y - np.random.random_sample((S,))*height
-            olist = np.random.random_sample((S,))*2*np.pi
+            real_trans = self.world_eye.lookup_transform("map", "base_link", rospy.Time())
+            real_w = real_trans.transform.rotation.w
+            real_o = 2*np.arccos(real_w)
+
+            xlist = origin_x - np.random.random_sample((S,))*width
+            olist = real_o*np.ones((S,))
             new_particles = np.column_stack((xlist,ylist,olist))
             self.particles = new_particles
             #print(S)
