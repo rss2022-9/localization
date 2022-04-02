@@ -126,12 +126,11 @@ class ParticleFilter:
             weights = self.sensor_model.evaluate(self.particles, observation)
             weights = weights/np.sum(weights)
 
+            weights_cum = np.cumsum(weights)
             r = np.random.rand()/self.num_particles # generate a random number
-            c = weights[0]
-            i = 0
             resample_particle = []
             
-            weights_cum = np.cumsum(weights)
+            
             """
             tresample_particle = []
             tm = np.arange(self.num_particles, dtype = float)
