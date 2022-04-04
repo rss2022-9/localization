@@ -52,7 +52,7 @@ class ParticleFilter:
         self.pos_initialized = False
 
         # Subscribers and Publishers
-        self.laser_sub = rospy.Subscriber(scan_topic, numpy_msg(LaserScan), self.calcprobs, queue_size=1)
+        self.laser_sub = rospy.Subscriber(scan_topic, numpy_msg(LaserScan), self.low_variance_resample, queue_size=1)
         self.odom_sub  = rospy.Subscriber(odom_topic, Odometry, self.updposes, queue_size=1)
         self.pose_sub  = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.initposes, queue_size=1)
         self.odom_pub  = rospy.Publisher("/pf/pose/odom", Odometry, queue_size = 1)
