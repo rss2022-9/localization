@@ -1,9 +1,9 @@
 log.npz
 .ipynb_checkpoints/
 build
-*.so
-scan_simulator_2d.cpp
+src/localization/*.so
+src/localization/scan_simulator_2d.cpp
 *.sw*
-*.pyc
+src/localization/*.pyc
 .vscode/
 CATKIN_IGNORE

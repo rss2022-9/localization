@@ -1,23 +1,22 @@
-from locale import normalize
 import numpy as np
-from scan_simulator_2d import PyScanSimulator2D
-
 import rospy
 import tf
-from nav_msgs.msg import OccupancyGrid
+
 from tf.transformations import quaternion_from_euler
+from scan_simulator_2d import PyScanSimulator2D
+from nav_msgs.msg import OccupancyGrid
 
 class SensorModel:
 
     def __init__(self):
         # Fetch parameters
-        self.map_topic = rospy.get_param("~map_topic")
-        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
-        self.num_particles = rospy.get_param("~num_particles")
-        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
-        self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
-        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale")
-
+        self.map_topic = rospy.get_param("~map_topic", "/map")
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle", 100)
+        self.num_particles = rospy.get_param("~num_particles", 100)
+        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization", 500)
+        self.scan_field_of_view = rospy.get_param("~scan_field_of_view", 4.71)
+        self.lidar_scale_to_map_scale = rospy.get_param("~lidar_scale_to_map_scale", 1.0)
+        squash_denom = rospy.get_param("~squash_denom", 2.2)
         ####################################
         # TODO
         # Adjust these parameters
@@ -33,7 +32,7 @@ class SensorModel:
         self.zmax = self.table_width-1
         self.eps = 1.0 # for Pmax
         self.sigma_hit = 8.0
-        self.squash = 1.0/2.2   # avoid peak in the probablity
+        self.squash = 1.0/squash_denom   # avoid peak in the probablity 10.2
         ####################################
 
         # Precompute the sensor model table
@@ -41,21 +40,12 @@ class SensorModel:
         self.precompute_sensor_model()
 
         # Create a simulated laser scan
-        self.scan_sim = PyScanSimulator2D(
-                self.num_beams_per_particle,
-                self.scan_field_of_view,
-                0, # This is not the simulator, don't add noise
-                0.01, # This is used as an epsilon
-                self.scan_theta_discretization) 
-
+        self.scan_sim = PyScanSimulator2D(self.num_beams_per_particle, self.scan_field_of_view, 0, 0.01, self.scan_theta_discretization) 
+        self.scale = 0
         # Subscribe to the map
         self.map = None
         self.map_set = False
-        rospy.Subscriber(
-                self.map_topic,
-                OccupancyGrid,
-                self.map_callback,
-                queue_size=1)
+        rospy.Subscriber(self.map_topic, OccupancyGrid, self.map_callback, queue_size=1)
 
     def precompute_sensor_model(self):
         """
@@ -110,8 +100,8 @@ class SensorModel:
         # we don't need val_list, after normalization, they will be the same
         # val_list = np.linspace(zmin, zmax, self.table_width)
         # val_list = range(self.table_width)
-        for d_col in range(self.table_width):
 
+        for d_col in range(self.table_width):
             eta_sum = 0.0              # normalization factor for Phit 
             for zk_row in range(self.table_width):
                 eta_sum += Phit(float(zk_row), 1.0, float(d_col))
@@ -121,7 +111,6 @@ class SensorModel:
 
             # normalize the whole column
             self.sensor_model_table[:,d_col] /= sum(self.sensor_model_table[:,d_col])
-        # print(self.sensor_model_table[0,:])
 
     def evaluate(self, particles, observation):
         """
@@ -146,8 +135,7 @@ class SensorModel:
 
         if not self.map_set:
             return
-        num_particles = particles.shape[0]
-
+        
         ####################################
         # how to calculate the distribution, avg or compare each one?
 
@@ -157,48 +145,24 @@ class SensorModel:
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle
         # val_list = range(self.zmin, self.zmax, self.table_width)
-
-        # down sample all the measurements of particle to length of observation data
-        # TODO: make sure observation is row vec
-        # down_sample_matrix= np.tile(down_sample_index, (particles.shape[0], 1))                                   # broadcast to matrix, which is the col indices
-        # col, row = np.meshgrid(np.arange(observation.shape[0]), np.arange(particles.shape[0])) # x-> col, y->row
-        # down_sample_obs   = observation[down_sample_index]    # down sampled observation
         
-        # down sample observation equally to # beams per particle
-        # down_sample_index        = np.array(np.linspace(0, observation.shape[0]-1, num=self.num_beams_per_particle), dtype=int) # generate downsample indicies
-        # observation_down_sample  = observation[down_sample_index]                                    # down sample observation
-        observation_down_sample  = observation / (self.map_resolution*self.lidar_scale_to_map_scale)  # convert meters to pixels
-        observation_matrix       = np.tile(np.array(observation_down_sample), (num_particles,1))     # repeat down_sampled observation in row
-        observation_matrix       = np.clip(observation_matrix, self.zmin, self.zmax)                 # limit the x, y coordinate value to zmin, zmax (in pixel representation)
-        observation_matrix = np.rint(observation_matrix).astype(np.uint16) # np.array(observation_matrix, dtype=int)                                 # convert to int as array indicies
+        num_particles = particles.shape[0]
 
-        scans = self.scan_sim.scan(particles)                          # get ray-casting
-        scans /= (self.map_resolution*self.lidar_scale_to_map_scale)   # convert meters to pixels
-        scans = np.clip(scans, self.zmin, self.zmax)                   # limit the x, y coordinate value to zmin, zmax (in pixel representation)
-        scans = np.rint(scans).astype(np.uint16)
-        
-        probability_m = self.sensor_model_table[observation_matrix, scans]     # scans-particle measurement k-row; observation-real lidar d-col 
-        # probability_vec = np.sum(np.log(probability_m), axis=1)              # guarantee sum of the probability for each particle <= 1
-        # probability_vec = np.sum(probability_m,axis=1)                         # sum all the probablity for a particle
-        probability_vec   = np.prod(probability_m, axis=1)
-        probability_vec   = probability_vec**self.squash
-        return probability_vec # /np.sum(probability_vec)
-        
-        # probability = np.zeros(particles.shape[0])
+        observation_matrix = np.tile(np.array(observation), (num_particles,1)) # broadcast to matrix, which is the col indices
+        observation_matrix = self.scale_clip(observation_matrix) # change meters to pixels and limit x,y coords
 
-        # for i in range(particles.shape[0]):
+        scans = self.scan_sim.scan(particles) # get ray-casting
+        scans = self.scale_clip(scans) # change meters to pixels and limit x,y coords
 
-        #     zki = particles[i, :2].dot(particles[i, :2])
-        #     d = observation[:2].dot(observation[:2])
+        probability_m = self.sensor_model_table[observation_matrix, scans] # scans-particle measurement k-row; observation-real lidar d-col
+        probability_vec   = np.prod(probability_m, axis=1)**self.squash
+        return probability_vec
 
-        #     differencez = np.abs(zki-val_list)
-        #     indexz = differencez.argmin()
-        #     differenced = np.abs(zki-val_list)
-        #     indexd = differenced.argmin()
-
-        #     probability[i] = self.sensor_model_table[indexz, indexd]
-
-        ####################################
+    def scale_clip(self,matrix):
+        matrix /= self.scale # convert meters to pixels
+        matrix = np.clip(matrix, self.zmin, self.zmax) # limit the x, y coordinate value to zmin, zmax (in pixel representation)
+        matrix = np.rint(matrix).astype(np.uint16) # convert to int as array indicies
+        return matrix
 
     def map_callback(self, map_msg):
         # Convert the map to a numpy array
@@ -224,7 +188,7 @@ class SensorModel:
                 map_msg.info.resolution,
                 origin,
                 0.5) # Consider anything < 0.5 to be free
-
+        self.scale = (self.map_resolution*self.lidar_scale_to_map_scale)
         # Make the map set
         self.map_set = True
 
